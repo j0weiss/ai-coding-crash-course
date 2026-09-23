@@ -13,6 +13,10 @@ import {
   getLessonProgressForCourse,
   getNextIncompleteLesson,
 } from "~/services/progressService";
+import {
+  getAverageRatingForCourse,
+  getUserRatingForCourse,
+} from "~/services/ratingService";
 import { getCurrentUserId } from "~/lib/session";
 import { LessonProgressStatus } from "~/db/schema";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
@@ -37,6 +41,7 @@ import {
 } from "lucide-react";
 import { CourseImage } from "~/components/course-image";
 import { UserAvatar } from "~/components/user-avatar";
+import { StarRating } from "~/components/star-rating";
 import { data, isRouteErrorResponse } from "react-router";
 import { formatDuration, formatPrice } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
@@ -91,6 +96,17 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
+  // Rating summary is public — always fetch regardless of auth state.
+  const { average: averageRating, count: ratingCount } =
+    getAverageRatingForCourse(course.id);
+
+  // A user's own rating only exists/matters if they're logged in — mirror
+  // the `enrolled` guard above rather than calling the service with a
+  // null/undefined userId.
+  const userRating = currentUserId
+    ? getUserRatingForCourse(currentUserId, course.id)
+    : null;
+
   // Render sales copy from Markdown to HTML server-side
   const salesCopyHtml = courseWithDetails.salesCopy
     ? await renderMarkdown(courseWithDetails.salesCopy)
@@ -113,6 +129,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     currentUserId,
     pppPrice,
     tierInfo,
+    averageRating,
+    ratingCount,
+    userRating,
   };
 }
 
@@ -181,8 +200,12 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     currentUserId,
     pppPrice,
     tierInfo,
+    averageRating,
+    ratingCount,
+    userRating,
   } = loaderData;
   const isInstructor = currentUserId === course.instructorId;
+  const canRate = enrolled && !isInstructor;
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
@@ -320,6 +343,13 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
               {formatDuration(totalDuration, true, false, false)} total
             </span>
           )}
+          <StarRating
+            average={averageRating}
+            count={ratingCount}
+            courseId={course.id}
+            canRate={canRate}
+            userRating={userRating}
+          />
         </div>
       </div>
 
